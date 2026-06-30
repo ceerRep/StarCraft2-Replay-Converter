@@ -30,3 +30,24 @@
 该工具通过修改录像文件版本号部分的ViNT压缩数据区块从而达到修复目的，更多关于录像文件结构相关的部分请参考三方工具 [sc2reader](https://github.com/ggtracker/sc2reader) 或者暴雪官方开源的 [s2protocol](https://github.com/Blizzard/s2protocol) 。
 
 由于工具只会修改特定数据区块，您需要清楚该工具无法让您观看不受支持的大版本录像，也无法用于修复由于星际争霸2客户端相关未知bug或者地图依赖配置不当导致的录像文件先天性结构缺失，异常，数据不同步等相关问题。
+
+## 跨区转换（KR↔CN 等）
+
+新增「跨区转换」模式，可把一个区服的录像（如韩服）转换成另一个区服（如国服）客户端能加载的版本。
+
+使用方法：选择一局**目标区服、同一张地图**的录像作为参考，再拖入待转换的录像即可。工具会自动：
+
+1. **版本/ngdpRootKey/DataBuild** —— 从参考录像复制
+2. **依赖缓存句柄（cache handle）** —— 区域码整体替换（如 `KR`→`CN`）；区域特定 mod（如 `VoidMulti.SC2Mod`，依赖列表中第一个跨区不一致的句柄）替换为参考录像对应哈希；其余共享依赖只换区域、未知 mod 保持不动
+3. **`m_modFileSyncChecksum`** —— 录像在加载界面会校验 mod 文件指纹（位打包存储于 `replay.initData`），工具会按位修补为参考录像的值，否则报「已加载的mod数据和游戏使用的mod数据不匹配」
+4. **`replay.gamemetadata.json`** —— 同步版本元信息
+5. **`replay.sync.events`** —— 可选清空（默认开启）。跨区/跨 build 时，逐帧状态校验和带有区域相关因素，重放会触发「录像不同步」误报；清空后可正常播放（不影响实际内容，因为模拟由 `replay.game.events` 驱动）
+6. 重建 MPQ（v1 格式）并重算 `(attributes)` 的 CRC32 + MD5
+
+### 实现细节
+
+- 内置纯 JS 的 bzip2 解压、MPQ 解析/重建、MPQ 加解密、以及从 [s2protocol](https://github.com/Blizzard/s2protocol) 移植的 BitPackedDecoder（用于定位位打包字段），全部本地运行、无需联网
+- 区域特定 mod 文件可从暴雪 depot 获取：`https://eu-s2-depot.classic.blizzard.com/<hash>.s2ma`
+- 若目标客户端提示「关联模块不可用」，说明本地缺少某个区域特定 mod，需手动把对应 `.s2ma` 放进 `Battle.net\Cache\<前2位>\<3-4位>\<完整hash>.s2ma`
+
+⚠️ 跨区转换属于实验性功能：只有当两个区服的实际 mod 游戏数据一致时才能正常回放（区域差异通常仅为本地化文本，不影响模拟）。若两区的引擎或平衡数据有实质差异，仍可能不同步。
